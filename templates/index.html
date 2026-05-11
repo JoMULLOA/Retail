@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RetailVision — Detección de Personas</title>
+    <style>
+        /* ═══════════════════════════════════════
+           Design System
+           ═══════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --bg-card-hover: #1f2a3d;
+            --border: #2a3a4e;
+            --text-primary: #f0f2f5;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            --transition: 200ms ease;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                         'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* ═══════════════════════════════════════
+           Layout
+           ═══════════════════════════════════════ */
+        .app {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 100vh;
+        }
+
+        /* ═══ Header ═══ */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .logo h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo span {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.idle { background: var(--text-muted); animation: none; }
+        .status-dot.off  { background: var(--accent-red); animation: none; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.4; }
+        }
+
+        /* ═══ Main Grid ═══ */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            flex: 1;
+        }
+
+        /* ═══ Video Panel ═══ */
+        .video-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-panel .panel-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            min-height: 480px;
+            position: relative;
+        }
+
+        .video-container {
+            position: relative;
+        }
+
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .done-overlay {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid var(--accent-green);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            backdrop-filter: blur(4px);
+            z-index: 10;
+        }
+
+        .done-overlay .done-icon { font-size: 1.5rem; }
+        .done-overlay .done-text {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+        .done-overlay .done-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 180px;
+        }
+        .done-overlay .done-btn {
+            margin-top: 8px;
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            background: var(--accent-green);
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity var(--transition);
+        }
+        .done-overlay .done-btn:hover { opacity: 0.8; }
+
+        .placeholder {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .placeholder .icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .placeholder p {
+            font-size: 0.95rem;
+        }
+
+        .placeholder .sub {
+            font-size: 0.8rem;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        /* ═══ Upload Zone ═══ */
+        .upload-zone {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+
+        .drop-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-sm);
+            padding: 28px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition);
+            position: relative;
+        }
+
+        .drop-area:hover,
+        .drop-area.dragover {
+            border-color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.06);
+        }
+
+        .drop-area .icon { font-size: 2rem; margin-bottom: 8px; }
+        .drop-area p { color: var(--text-secondary); font-size: 0.9rem; }
+        .drop-area .hint { color: var(--text-muted); font-size: 0.75rem; margin-top: 4px; }
+        .drop-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-status {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            margin-top: 12px;
+        }
+
+        .upload-status.show { display: flex; }
+        .upload-status .spinner {
+            width: 18px; height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .upload-status .name {
+            flex: 1;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .upload-status .check {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        /* ═══ Stats Panel ═══ */
+        .stats-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .stat-card .value.green  { color: var(--accent-green); }
+        .stat-card .value.blue   { color: var(--accent-blue); }
+        .stat-card .value.yellow { color: var(--accent-yellow); }
+        .stat-card .value.muted  { color: var(--text-secondary); }
+
+        .stat-card .sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Progress bar in stats */
+        .progress-track {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+            border-radius: 3px;
+            transition: width 300ms ease;
+            width: 0%;
+        }
+
+        .progress-fill.done {
+            background: linear-gradient(90deg, var(--accent-yellow), var(--accent-green));
+        }
+
+        /* ═══ Footer ═══ */
+        footer {
+            text-align: center;
+            padding: 16px 0 8px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ═══ Responsive ═══ */
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            .video-container {
+                min-height: 300px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .app { padding: 12px; }
+            header { flex-direction: column; gap: 8px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+
+        <!-- ════ Header ════ -->
+        <header>
+            <div class="logo">
+                <h1>RetailVision</h1>
+                <span>Piloto — Detección de Personas YOLOv11</span>
+            </div>
+            <div class="header-status">
+                <span class="status-dot idle" id="statusDot"></span>
+                <span id="statusText">Esperando video</span>
+            </div>
+        </header>
+
+        <!-- ════ Main Grid ════ -->
+        <div class="main-grid">
+
+            <!-- ─── Left: Video ─── -->
+            <div class="video-panel">
+                <div class="panel-header">
+                    <h2>📹 Stream en vivo</h2>
+                    <span id="videoLabel" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+                </div>
+
+                <div class="video-container" id="videoContainer">
+                    <div class="placeholder" id="placeholder">
+                        <div class="icon">🎥</div>
+                        <p>Sube un video para comenzar</p>
+                        <p class="sub">MP4, AVI, MOV, MKV — lo procesamos y mostramos las detecciones</p>
+                    </div>
+                    <img id="videoStream" style="display:none;" alt="Video Stream" />
+                    <div class="done-overlay" id="doneOverlay" style="display:none;">
+                        <div class="done-icon">✅</div>
+                        <div class="done-text">Procesado</div>
+                        <div class="done-sub">Los bounding boxes quedan visibles en el último frame</div>
+                        <button class="done-btn" onclick="resetUpload()">Subir otro video</button>
+                    </div>
+                </div>
+
+                <!-- Upload Zone -->
+                <div class="upload-zone">
+                    <div class="drop-area" id="dropArea">
+                        <div class="icon">📁</div>
+                        <p>Arrastra un video aquí o haz clic para seleccionar</p>
+                        <p class="hint">MP4 · AVI · MOV · MKV</p>
+                        <input type="file" accept="video/mp4,video/avi,video/quicktime,video/x-matroska,video/webm" id="fileInput" />
+                    </div>
+                    <div class="upload-status" id="uploadStatus">
+                        <div class="spinner"></div>
+                        <span class="name" id="uploadFileName">Subiendo...</span>
+                        <span class="check" id="uploadCheck"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── Right: Stats ─── -->
+            <div class="stats-panel">
+                <div class="stat-card">
+                    <div class="label">Personas ahora</div>
+                    <div class="value green" id="statCurrent">0</div>
+                    <div class="sub">en el frame actual</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="label">Máximo concurrente</div>
+                    <div class="value yellow" id="statMax">0</div>
+                    <div class="sub">pico del video</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="label">Detecciones totales</div>
+                    <div class="value blue" id="statTotal">0</div>
+                    <div class="sub">suma de todas las detecciones</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="label">Rendimiento</div>
+                    <div class="value muted" id="statFps">0.0</div>
+                    <div class="sub"><span id="statDevice">CPU</span> · FPS de procesamiento</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="label">Progreso del video</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="sub" id="progressLabel" style="margin-top:6px;">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            RetailVision Pilot · YOLOv11 + FastAPI · Procesamiento local
+        </footer>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════
+        // JavaScript — State & UI Logic
+        // ═══════════════════════════════════════════
+
+        const DOM = {
+            fileInput:     document.getElementById('fileInput'),
+            dropArea:      document.getElementById('dropArea'),
+            uploadStatus:  document.getElementById('uploadStatus'),
+            uploadFileName:document.getElementById('uploadFileName'),
+            uploadCheck:   document.getElementById('uploadCheck'),
+            videoStream:   document.getElementById('videoStream'),
+            placeholder:   document.getElementById('placeholder'),
+            videoLabel:    document.getElementById('videoLabel'),
+            statusDot:     document.getElementById('statusDot'),
+            statusText:    document.getElementById('statusText'),
+            statCurrent:   document.getElementById('statCurrent'),
+            statMax:       document.getElementById('statMax'),
+            statTotal:     document.getElementById('statTotal'),
+            statFps:       document.getElementById('statFps'),
+            statDevice:    document.getElementById('statDevice'),
+            progressFill:  document.getElementById('progressFill'),
+            progressLabel: document.getElementById('progressLabel'),
+            doneOverlay:   document.getElementById('doneOverlay'),
+        };
+
+        let pollInterval = null;
+        let streamActive = false;
+
+        // ════ Drag & Drop ════
+        DOM.dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            DOM.dropArea.classList.add('dragover');
+        });
+        DOM.dropArea.addEventListener('dragleave', () => {
+            DOM.dropArea.classList.remove('dragover');
+        });
+        DOM.dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            DOM.dropArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) uploadFile(files[0]);
+        });
+        DOM.fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) uploadFile(e.target.files[0]);
+        });
+
+        // ════ Upload ════
+        async function uploadFile(file) {
+            // Show uploading state
+            DOM.uploadStatus.classList.add('show');
+            DOM.uploadFileName.textContent = `Subiendo ${file.name}...`;
+            DOM.uploadCheck.textContent = '';
+            setStatus('uploading', 'Subiendo video...');
+
+            // Check server is alive first
+            try {
+                const ping = await fetch('/stats', { method: 'GET', signal: AbortSignal.timeout(3000) });
+                if (!ping.ok) throw new Error('Servidor no responde');
+            } catch (pingErr) {
+                DOM.uploadFileName.textContent = `❌ Servidor no disponible. ¿Ejecutaste "python app.py"?`;
+                DOM.uploadCheck.textContent = '✗';
+                setStatus('error', 'Servidor caído');
+                console.error('Server check failed:', pingErr);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                    signal: AbortSignal.timeout(120000), // 2min timeout para videos grandes
+                });
+
+                let errMsg;
+                try {
+                    const body = await res.json();
+                    errMsg = body.detail;
+                } catch (_) {
+                    errMsg = `HTTP ${res.status} ${res.statusText}`;
+                }
+
+                if (!res.ok) {
+                    throw new Error(errMsg || 'Error al subir');
+                }
+
+                // Upload complete
+                DOM.uploadFileName.textContent = file.name;
+                DOM.uploadCheck.textContent = '✓';
+
+                // Start stream
+                startStream(file.name);
+            } catch (err) {
+                if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+                    DOM.uploadFileName.textContent = '⏱ Tiempo de espera agotado (video muy grande)';
+                } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                    DOM.uploadFileName.textContent = '❌ Error de conexión. ¿El servidor sigue corriendo?';
+                } else {
+                    DOM.uploadFileName.textContent = `❌ ${err.message}`;
+                }
+                DOM.uploadCheck.textContent = '✗';
+                setStatus('error', 'Error al subir');
+                console.error('Upload error:', err);
+            }
+        }
+
+        // ════ Stream ════
+        function startStream(videoName) {
+            // Hide placeholder, show stream
+            DOM.placeholder.style.display = 'none';
+            DOM.videoStream.style.display = 'block';
+
+            // Bust cache so browser reloads the stream
+            const ts = Date.now();
+            DOM.videoStream.src = `/video_feed?_t=${ts}`;
+            DOM.videoLabel.textContent = videoName;
+
+            streamActive = true;
+            setStatus('processing', 'Procesando video...');
+
+            // Start polling stats
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(pollStats, 500);
+        }
+
+        // ════ Stats Polling ════
+        async function pollStats() {
+            try {
+                const res = await fetch('/stats');
+                const s = await res.json();
+
+                DOM.statCurrent.textContent = s.current_persons;
+                DOM.statMax.textContent     = s.max_persons;
+                DOM.statTotal.textContent   = s.total_detections;
+                DOM.statFps.textContent     = s.fps.toFixed(1);
+                DOM.statDevice.textContent  = (s.device || 'CPU').toUpperCase();
+
+                const pct = (s.progress * 100).toFixed(0);
+                DOM.progressFill.style.width = pct + '%';
+                DOM.progressLabel.textContent = pct + '%';
+
+                if (s.progress >= 1) {
+                    DOM.progressFill.classList.add('done');
+                }
+
+                // Update status
+                if (!s.processing) {
+                    if (s.total_frames > 0) {
+                        setStatus('done', '✅ Video procesado — detecciones visibles en el frame congelado');
+                        DOM.statFps.textContent = s.fps.toFixed(1);
+                        // Mostrar overlay de completado sobre el video
+                        DOM.doneOverlay.style.display = 'flex';
+                    } else {
+                        setStatus('idle', 'Esperando video');
+                    }
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                    }
+                } else {
+                    setStatus('processing', `Procesando — ${pct}%`);
+                }
+            } catch (err) {
+                // Stream might have ended — ignore polling errors
+                console.warn('Stats poll error:', err);
+            }
+        }
+
+        // ════ Status Helpers ════
+        function setStatus(type, text) {
+            DOM.statusText.textContent = text;
+            DOM.statusDot.className = 'status-dot';
+            if (type === 'processing') DOM.statusDot.classList.add('processing');
+            else if (type === 'idle')   DOM.statusDot.classList.add('idle');
+            else if (type === 'error')  DOM.statusDot.classList.add('off');
+            else if (type === 'done')   { /* keep default pulse — green */ }
+            else if (type === 'uploading') DOM.statusDot.classList.add('processing');
+        }
+
+        // ════ Handle stream end (img load ceases) ════
+        DOM.videoStream.addEventListener('error', () => {
+            // The MJPEG stream ended — that's normal when video finishes
+            // We DO NOT hide the video — the last frame stays visible with detections
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            // Stream ended — the backend already set processing=false
+            // If stats show we processed frames, we're done. If not, something failed.
+            fetch('/stats').then(s => s.json()).then(s => {
+                if (s.total_frames > 0) {
+                    setStatus('done', '✅ Video procesado');
+                } else {
+                    setStatus('idle', 'Stream finalizado');
+                }
+            }).catch(() => {
+                setStatus('idle', 'Stream finalizado');
+            });
+        });
+
+        // ════ Reset for new upload ════
+        function resetUpload() {
+            DOM.doneOverlay.style.display = 'none';
+            DOM.placeholder.style.display = 'block';
+            DOM.videoStream.style.display = 'none';
+            DOM.videoLabel.textContent = '—';
+            DOM.videoStream.src = '';
+            setStatus('idle', 'Esperando video');
+            DOM.statCurrent.textContent = '0';
+            DOM.statMax.textContent = '0';
+            DOM.statTotal.textContent = '0';
+            DOM.statFps.textContent = '0.0';
+            DOM.progressFill.style.width = '0%';
+            DOM.progressFill.classList.remove('done');
+            DOM.progressLabel.textContent = '0%';
+        }
+    </script>
+</body>
+</html>

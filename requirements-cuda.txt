@@ -1,0 +1,28 @@
+# ============================================================
+# RetailVision Pilot — GPU / CUDA
+# ============================================================
+# Instala PyTorch con CUDA 12.4 desde el index oficial.
+# Requiere: NVIDIA GPU + drivers CUDA 12.4+.
+#
+#   pip install -r requirements-cuda.txt
+#   python app.py
+# ============================================================
+
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.4
+python-multipart==0.0.19
+aiofiles==24.1.0
+
+# Computer vision
+opencv-python-headless==4.10.0.84
+numpy>=2.0.0
+
+# YOLO
+ultralytics==8.3.61
+
+# PyTorch con CUDA 12.4 (instalación manual via index-url)
+# Se instala aparte con: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# NOTA: torch y torchvision están comentados porque pip install -r NO soporta --index-url por línea.
+# Corre install_cuda.bat después de este archivo.
