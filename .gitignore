@@ -31,6 +31,7 @@ uploads/
 # ── Windows ──
 Thumbs.db
 *.log
+nul
 
 # ── OS ──
 .DS_Store
@@ -38,3 +39,6 @@ Thumbs.db
 ._*
 .Spotlight-V100
 .Trashes
+
+# ── Docker ──
+docker-data/

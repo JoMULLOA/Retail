@@ -1,0 +1,20 @@
+services:
+  retailvision:
+    build: .
+    container_name: retailvision
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      # Persiste los videos subidos entre reinicios (opcional)
+      - uploads_data:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  uploads_data:
