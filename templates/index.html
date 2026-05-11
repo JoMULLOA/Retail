@@ -354,6 +354,57 @@
             border-top: 1px solid var(--border);
         }
 
+        /* ═══ Heatmap Toggle ═══ */
+        .toggle-heatmap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-heatmap input {
+            display: none;
+        }
+
+        .toggle-track {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: background var(--transition), border-color var(--transition);
+            flex-shrink: 0;
+        }
+
+        .toggle-thumb {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            transition: transform var(--transition), background var(--transition);
+        }
+
+        .toggle-heatmap input:checked + .toggle-track {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: var(--accent-red);
+        }
+
+        .toggle-heatmap input:checked + .toggle-track .toggle-thumb {
+            transform: translateX(20px);
+            background: var(--accent-red);
+        }
+
+        .toggle-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
         /* ═══ Responsive ═══ */
         @media (max-width: 900px) {
             .main-grid {
@@ -392,7 +443,16 @@
             <div class="video-panel">
                 <div class="panel-header">
                     <h2>📹 Stream en vivo</h2>
-                    <span id="videoLabel" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+                    <div style="display:flex;align-items:center;gap:16px;">
+                        <label class="toggle-heatmap">
+                            <input type="checkbox" id="heatmapToggle" checked />
+                            <span class="toggle-track">
+                                <span class="toggle-thumb"></span>
+                            </span>
+                            <span class="toggle-label">Mapa de calor</span>
+                        </label>
+                        <span id="videoLabel" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+                    </div>
                 </div>
 
                 <div class="video-container" id="videoContainer">
@@ -447,6 +507,12 @@
                 </div>
 
                 <div class="stat-card">
+                    <div class="label">Personas únicas</div>
+                    <div class="value blue" id="statUnique">0</div>
+                    <div class="sub">IDs únicos detectados en todo el video</div>
+                </div>
+
+                <div class="stat-card">
                     <div class="label">Rendimiento</div>
                     <div class="value muted" id="statFps">0.0</div>
                     <div class="sub"><span id="statDevice">CPU</span> · FPS de procesamiento</div>
@@ -488,6 +554,8 @@
             statTotal:     document.getElementById('statTotal'),
             statFps:       document.getElementById('statFps'),
             statDevice:    document.getElementById('statDevice'),
+            statUnique:    document.getElementById('statUnique'),
+            heatmapToggle: document.getElementById('heatmapToggle'),
             progressFill:  document.getElementById('progressFill'),
             progressLabel: document.getElementById('progressLabel'),
             doneOverlay:   document.getElementById('doneOverlay'),
@@ -495,6 +563,20 @@
 
         let pollInterval = null;
         let streamActive = false;
+
+        // ════ Heatmap Toggle ════
+        DOM.heatmapToggle.addEventListener('change', async function() {
+            try {
+                const res = await fetch('/toggle_heatmap', { method: 'POST' });
+                const data = await res.json();
+                // Sincronizar con el estado real del backend
+                this.checked = data.heatmap_enabled;
+            } catch (err) {
+                console.error('Error al alternar mapa de calor:', err);
+                // Revertir en caso de error
+                this.checked = !this.checked;
+            }
+        });
 
         // ════ Drag & Drop ════
         DOM.dropArea.addEventListener('dragover', (e) => {
@@ -601,11 +683,12 @@
                 const res = await fetch('/stats');
                 const s = await res.json();
 
-                DOM.statCurrent.textContent = s.current_persons;
-                DOM.statMax.textContent     = s.max_persons;
-                DOM.statTotal.textContent   = s.total_detections;
-                DOM.statFps.textContent     = s.fps.toFixed(1);
-                DOM.statDevice.textContent  = (s.device || 'CPU').toUpperCase();
+                DOM.statCurrent.textContent  = s.current_persons;
+                DOM.statMax.textContent      = s.max_persons;
+                DOM.statTotal.textContent    = s.total_detections;
+                DOM.statFps.textContent      = s.fps.toFixed(1);
+                DOM.statDevice.textContent   = (s.device || 'CPU').toUpperCase();
+                DOM.statUnique.textContent   = s.unique_persons;
 
                 const pct = (s.progress * 100).toFixed(0);
                 DOM.progressFill.style.width = pct + '%';
@@ -681,6 +764,7 @@
             DOM.statCurrent.textContent = '0';
             DOM.statMax.textContent = '0';
             DOM.statTotal.textContent = '0';
+            DOM.statUnique.textContent = '0';
             DOM.statFps.textContent = '0.0';
             DOM.progressFill.style.width = '0%';
             DOM.progressFill.classList.remove('done');

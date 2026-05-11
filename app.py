@@ -32,6 +32,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
+import numpy as np
 import torch
 import uvicorn
 
@@ -79,7 +80,6 @@ print(f"📡 Dispositivo: {model.device}\n")
 
 # Warm-up: tiny inference to initialize CUDA kernels
 if DEVICE != "cpu":
-    import numpy as np
     dummy = np.zeros((640, 640, 3), dtype=np.uint8)
     model.predict(dummy, verbose=False, device=DEVICE)
     print("  🔥 CUDA warmed up\n")
@@ -101,7 +101,13 @@ _state = {
     "current_persons": 0,
     "fps": 0.0,
     "progress": 0.0,
+    "heatmap_enabled": True,
+    "unique_persons": 0,
 }
+
+# Tracking & heatmap globals (accessed only inside generate_frames — single thread)
+_heatmap_acc: np.ndarray | None = None   # float32 accumulator, shape (H, W)
+_seen_ids: set[int] = set()              # unique track IDs seen so far
 
 
 def get_state():
@@ -232,7 +238,14 @@ async def upload_video(file: UploadFile = File(...)):
         current_persons=0,
         fps=0.0,
         progress=0.0,
+        heatmap_enabled=True,
+        unique_persons=0,
     )
+
+    # Reset tracking & heatmap state for new video
+    global _heatmap_acc
+    _heatmap_acc = None
+    _seen_ids.clear()
 
     return {
         "status": "ok",
@@ -246,11 +259,19 @@ async def get_stats():
     return JSONResponse(get_state())
 
 
+@app.post("/toggle_heatmap")
+async def toggle_heatmap():
+    current = get_state()["heatmap_enabled"]
+    set_state(heatmap_enabled=not current)
+    return {"heatmap_enabled": not current}
+
+
 def generate_frames(video_path: str):
     """
     Generador sync MJPEG: lee video, corre YOLO, entrega frames anotados.
     Starlette lo ejecuta en un thread pool automáticamente (no bloquea el event loop).
     """
+    global _heatmap_acc
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"[ERROR] No se pudo abrir: {video_path}")
@@ -272,21 +293,41 @@ def generate_frames(video_path: str):
             # Resize si es muy grande (mejora performance)
             frame = resize_if_needed(frame)
 
-            # ── Inferencia YOLO (todo en este mismo thread) ──
-            results = model(frame, classes=[PERSON_CLASS],
-                            conf=CONFIDENCE, verbose=False)
+            # ── Inferencia YOLO con ByteTrack (todo en este mismo thread) ──
+            results = model.track(frame, persist=True,
+                                  tracker="config/bytetrack.yaml",
+                                  classes=[PERSON_CLASS],
+                                  conf=CONFIDENCE, verbose=False)
 
             boxes_data = results[0].boxes
             person_count = len(boxes_data)
 
             # ── Extraer datos a CPU / Python plano (evita CUDA cross-thread) ──
             dets = []
+            track_ids = boxes_data.id.int().cpu().tolist() if boxes_data.id is not None else []
             if boxes_data is not None and person_count > 0:
                 xyxy = boxes_data.xyxy.cpu().numpy() if boxes_data.xyxy.is_cuda else boxes_data.xyxy.numpy()
                 confs = boxes_data.conf.cpu().numpy() if boxes_data.conf.is_cuda else boxes_data.conf.numpy()
                 for i in range(person_count):
                     x1, y1, x2, y2 = map(int, xyxy[i])
-                    dets.append({"bbox": (x1, y1, x2, y2), "conf": float(confs[i])})
+                    tid = track_ids[i] if i < len(track_ids) else None
+                    dets.append({"bbox": (x1, y1, x2, y2), "conf": float(confs[i]), "track_id": tid})
+
+            # ── Track unique IDs ──
+            for det in dets:
+                if det["track_id"] is not None:
+                    _seen_ids.add(det["track_id"])
+
+            # ── Acumular mapa de calor ──
+            if _heatmap_acc is None:
+                h, w = frame.shape[:2]
+                _heatmap_acc = np.zeros((h, w), dtype=np.float32)
+
+            for det in dets:
+                x1, y1, x2, y2 = det["bbox"]
+                cx = (x1 + x2) // 2
+                cy = (y1 + y2) // 2
+                cv2.circle(_heatmap_acc, (cx, cy), 40, 1.0, -1)
 
             # ── Anotaciones en el frame ──
             annotated = frame.copy()
@@ -304,7 +345,10 @@ def generate_frames(video_path: str):
                 cv2.addWeighted(overlay, 0.08, annotated, 0.92, 0, annotated)
 
                 # Label con fondo sólido
-                label = f"Persona {conf:.0%}"
+                if det["track_id"] is not None:
+                    label = f"ID:{det['track_id']} {conf:.0%}"
+                else:
+                    label = f"Persona {conf:.0%}"
                 (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, 0.6, 2)
                 label_y = y1 - 10 if y1 > 28 else y2 + lh + 10
                 cv2.rectangle(annotated, (x1, label_y - lh - 6),
@@ -324,10 +368,18 @@ def generate_frames(video_path: str):
                 current_persons=person_count,
                 fps=fps,
                 progress=min(progress, 1.0),
+                unique_persons=len(_seen_ids),
             )
 
             # ── Overlay ──
             add_overlay(annotated, person_count, fps, min(progress, 1.0))
+
+            # ── Mapa de calor (si activo) ──
+            if get_state()["heatmap_enabled"] and _heatmap_acc is not None:
+                norm = cv2.normalize(_heatmap_acc, None, 0, 255,
+                                     cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                heatmap_color = cv2.applyColorMap(norm, cv2.COLORMAP_JET)
+                annotated = cv2.addWeighted(annotated, 0.6, heatmap_color, 0.4, 0)
 
             # ── Codificar JPEG ──
             ret_code, jpeg = cv2.imencode(

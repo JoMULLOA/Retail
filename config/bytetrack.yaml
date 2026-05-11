@@ -1,0 +1,11 @@
+# ByteTrack configuration — tuned for retail person tracking
+#   track_buffer: 45   → ~3s occlusion tolerance at 15 FPS (aisle shelf)
+#   match_thresh: 0.8  → relaxed IoU for partial occlusion at aisle edges
+#   fuse_score: True   → standard, improves ID stability
+#   new_track_thresh: 0.4 → lower threshold to initialize tracks sooner
+
+tracker_type: bytetrack
+track_buffer: 45
+match_thresh: 0.8
+new_track_thresh: 0.4
+fuse_score: True
